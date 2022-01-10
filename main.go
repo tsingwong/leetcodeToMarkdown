@@ -2,8 +2,8 @@
  * @Description:
  * @Author: Tsingwong
  * @Date: 2021-11-09 11:11:17
- * @LastEditors: Tsingwong
- * @LastEditTime: 2021-11-30 17:57:23
+
+
  */
 package main
 
@@ -118,6 +118,40 @@ func (n Number) getQuestionInfo() (Question, error) {
 	return data.Data.ProblemsetQuestionList.Questions[0], nil
 }
 
+type Text struct {
+	searchText string
+}
+
+func (t Text) getQuestionInfo() (Question, error) {
+	query := bytes.NewBuffer([]byte(fmt.Sprintf(`
+	{
+    "query": "\n    query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {\n  problemsetQuestionList(\n    categorySlug: $categorySlug\n    limit: $limit\n    skip: $skip\n    filters: $filters\n  ) {\n    hasMore\n    total\n    questions {\n      acRate\n      difficulty\n      freqBar\n      frontendQuestionId\n      isFavor\n      paidOnly\n      solutionNum\n      status\n      title\n      titleCn\n      titleSlug\n      topicTags {\n        name\n        nameTranslated\n        id\n        slug\n      }\n      extra {\n        hasVideoSolution\n        topCompanyTags {\n          imgUrl\n          slug\n          numSubscribed\n        }\n      }\n    }\n  }\n}\n    ",
+    "variables": {
+        "categorySlug": "",
+        "skip": 0,
+        "limit": 50,
+        "filters": {
+            "searchKeywords": "%v"
+        }
+    }
+	}`, t.searchText)))
+	body, err := generateHTTP(query)
+	if err != nil {
+		return Question{}, err
+	}
+	var data NumberRes
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return Question{}, err
+	}
+	for _, question := range data.Data.ProblemsetQuestionList.Questions {
+		if question.ID == t.searchText || strings.Contains(question.Title, t.searchText) {
+			return question, nil
+		}
+	}
+	return Question{}, nil
+}
+
 func generateHTTP(query io.Reader) ([]byte, error) {
 	req, _ := http.NewRequest("POST", URL, query)
 	req.Header.Set("User-Agent", USER_AGENT)
@@ -144,19 +178,16 @@ func main() {
 		outputProblem(today)
 	} else {
 		// getByNumber OR getByString
-		input := inputSlice[0]
+		input := strings.Join(inputSlice, " ")
 		num, err := strconv.Atoi(input)
 		if err != nil {
-			getByString(input)
+			text := Text{searchText: input}
+			outputProblem(text)
 			return
 		}
 		number := Number{id: num}
 		outputProblem(number)
 	}
-}
-
-func getByString(text string) {
-
 }
 
 // func getByNumber(num int) (Question, error) {
